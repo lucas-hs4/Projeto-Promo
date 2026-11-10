@@ -241,7 +241,10 @@ def identificar_categoria(nome, url_contexto="", preco_atual=10.0):
     
     if "tartarugas ninja" in texto or "ultimo ronin" in texto or "último ronin" in texto:
         return "As Tartarugas Ninja"
-    if "/disney" in texto or "disney" in texto or any(d in texto for d in ["mickey", "pato donald", "donald", "ducktales", "duck tales", "mickey e pateta", "tio patinhas", "minnie", "pateta", "19.999 léguas submarinas", "histórias de esportes"]):
+    if "/disney" in texto or "disney" in texto or any(d in texto for d in [
+        "mickey", "pato donald", "donald", "ducktales", "duck tales", "mickey e pateta",
+        "tio patinhas", "minnie", "pateta", "19.999 léguas submarinas", "histórias de esportes"
+    ]):
         return "Disney"
     if "/invencivel" in texto or "invencível" in texto or "invencivel" in texto:
         return "Invencível"
@@ -253,16 +256,30 @@ def identificar_categoria(nome, url_contexto="", preco_atual=10.0):
         return "Star Wars"
     elif "/the-walking-dead" in texto or "walking dead" in texto:
         return "The Walking Dead"
-    elif "/panini-books" in texto or "/novels" in texto or "novel" in texto or "livro" in texto or "livros.html" in texto or "livrosnovels" in texto:
-        return "Novels & Livros"
-    elif "/marvel" in texto or any(h in texto for h in ["marvel", "homem-aranha","homem de ferro", "viúva negra", "viuva negra", "viúva-negra", "aranha", "vingadores", "x-men", "wolverine", "demolidor", "thor", "capitão américa", "capitao américa", "hulk", "deadpool", "quarteto fantástico", "surfista prateado", "venom", "doutor estranho"]):
+    elif "/marvel" in texto or any(h in texto for h in [
+        "marvel", "homem-aranha","homem de ferro", "viúva negra", "viuva negra",
+        "viúva-negra", "aranha", "vingadores", "x-men", "wolverine", "demolidor",
+        "thor", "capitão américa", "capitao américa", "hulk", "deadpool", "quarteto fantástico",
+        "surfista prateado", "venom", "doutor estranho"
+    ]):
         return "Marvel"
-    elif "/dc-comics" in texto or "dc+comics" in texto or any(h in texto for h in ["dc", "batman", "superman", "mulher-maravilha", "liga da justiça", "flash", "lanterna verde", "asa noturna", "coringa", "sandman", "arlequina", "watchmen", "juízo final", "heróis em crise", "herois em crise", "robin", "shazam", "a saga dos superfilhos", "gordon: lei & ordem", "esquadrão suicida"]):
+    elif "/dc-comics" in texto or "dc+comics" in texto or any(h in texto for h in [
+        "dc", "batman", "superman", "mulher-maravilha", "liga da justiça", "flash", "lanterna verde",
+        "asa noturna", "coringa", "sandman", "arlequina", "watchmen", "juízo final", "heróis em crise",
+        "herois em crise", "robin", "shazam", "a saga dos superfilhos", "gordon: lei & ordem", "esquadrão suicida"
+    ]):
         return "DC Comics"
-    elif "/planet-manga" in texto or "planet+manga" in texto or "lojanewpop" in texto or "mpeg.com.br" in texto or "mangas.html" in texto or any(m in texto for m in ["junji ito", "shigurui", "city hunter", "cat's eye", "cats eye", "chushingura", "battle royale", "one piece", "berserk", "naruto", "dragon ball", "demon slayer", "jujutsu", "tokyo ghoul", "chainsaw man", "mashle", "re:zero", "katana beast", "record of ragnarok", "one punch man", "hokuto no ken", "the ghost in the shell", "devil exstasy", "zero no tsukaima", "aku no hana", "ragna crimson", "tower of god"]):
+    elif "/planet-manga" in texto or "planet+manga" in texto or "lojanewpop" in texto or "mpeg.com.br" in texto or "mangas.html" in texto or any(m in texto for m in [
+        "junji ito", "shigurui", "city hunter", "cat's eye", "cats eye", "chushingura", "battle royale", "one piece",
+        "berserk", "naruto", "dragon ball", "demon slayer", "jujutsu", "tokyo ghoul", "chainsaw man", "mashle", "re:zero",
+        "katana beast", "record of ragnarok", "one punch man", "hokuto no ken", "the ghost in the shell", "devil exstasy",
+        "zero no tsukaima", "aku no hana", "ragna crimson", "tower of god"
+    ]):
         return "Mangás"
     elif "/mauricio-de-sousa-catalogo" in texto or "mauricio" in texto or "mônica" in texto or "monica" in texto or "cebolinha" in texto or "cascão" in texto or "magali" in texto or "chico bento" in texto or "xaveco" in texto or "tina" in texto or "saiba mais" in texto:
         return "Turma da Mônica"
+    elif "/panini-books" in texto or "/novels" in texto or "novel" in texto or "livro" in texto or "livros.html" in texto or "livrosnovels" in texto:
+        return "Novels & Livros"
     else:
         return "Outros"
 
@@ -840,11 +857,14 @@ def extrair_vitrine_amazon(pagina, url_inicial, editora_padrao="Outras", max_pag
         botao_prox = pagina.locator("a.s-pagination-next:not(.s-pagination-disabled)").first
         if botao_prox.count() > 0 and pagina_num < max_paginas:
             prox_href = botao_prox.get_attribute("href")
-            url_atual = f"https://www.amazon.com.br{prox_href}" if prox_href.startswith("/") else prox_href
-            if "rh=" in url_inicial and "rh=" not in url_atual:
-                rh_original = [p for p in url_inicial.split("&") if p.startswith("rh=")][0]
-                url_atual += f"&i=stripbooks&{rh_original}"
-            pagina_num += 1
+            if prox_href:
+                url_atual = f"https://www.amazon.com.br{prox_href}" if prox_href.startswith("/") else prox_href
+                if "rh=" in url_inicial and "rh=" not in url_atual:
+                    rh_original = [p for p in url_inicial.split("&") if p.startswith("rh=")][0]
+                    url_atual += f"&i=stripbooks&{rh_original}"
+                pagina_num += 1
+            else:
+                url_atual = None
         else:
             motivo = "Limite de páginas atingido" if pagina_num >= max_paginas else "Última página da categoria atingida (botão Próximo desativado)"
             print(f"   [Fim do Link] Paginação encerrada na Página: {pagina_num}: {motivo}.")

@@ -127,7 +127,8 @@ def processar_produto(dados, conexao=None):
     """Salva o quadrinho no PostgreSQL e gerencia a trava de notificação."""
     if dados.get("plataforma", "Editoras") != "Editoras" and dados.get("categoria") == "Excluídos":
         return 
-    prod_id, alerta_ja_enviada, eh_favorito, preco_alvo = salvar_leitura(dados, conexao)
+    prod_id, alerta_ja_enviada, eh_favorito, preco_alvo, menor_historico = salvar_leitura(dados, conexao)
+    dados["eh_menor_historico"] = dados["preco_atual"] <= menor_historico and dados["desconto_pct"] > 0
     estrela = "⭐ " if eh_favorito else ""
     alvo_txt = f" [🎯 Alvo: R$ {preco_alvo:.2f}]" if preco_alvo > 0 else ""
     print(f"[DB] [{dados.get('loja', 'Panini')}] | ID #{prod_id} | {estrela}{dados['nome']}{alvo_txt} | R$ {dados['preco_atual']:.2f} | ({dados['desconto_pct']}% OFF) | {dados['status']}")
@@ -144,7 +145,8 @@ def processar_produto(dados, conexao=None):
     
     if em_promocao_valida:
         if not alerta_ja_enviada:
-            print(f" >>> NOVA PROMOÇÂO ({dados['desconto_pct']}% OFF)! Disparando Alerta...")
+            recorde_txt = " 🔥 (MENOR PREÇO HISTÓRICO!)" if dados["eh_menor_historico"] else ""
+            print(f" >>> NOVA PROMOÇÂO ({dados['desconto_pct']}% OFF){recorde_txt}! Disparando Alerta...")
             enviar_alerta_ntfy(dados, meta_desconto, eh_favorito)
             atualizar_status_alerta(prod_id, True)
         else:

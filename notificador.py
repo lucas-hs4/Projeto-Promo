@@ -12,9 +12,12 @@ def enviar_alerta_ntfy(dados, desconto_minimo, eh_favorito=False):
         print("[Aviso] NTFY_TOPICO não configurado no arquivo .env.")
         return
     
+    linha_recorde = "🔥 Menor preço histórico já visto!\n" if dados.get("eh_menor_historico") else ""
+    
     mensagem = (
         f"Por: R$ {dados['preco_atual']:.2f} ({dados['desconto_pct']}% OFF)\n"
-        f"Preço original: R$ {dados['preco_original']:.2f}\n"  
+        f"Preço original: R$ {dados['preco_original']:.2f}\n" 
+        f"{linha_recorde}"
         f"Status: {dados['status']}"
     )
     loja = dados.get("loja", "Panini")

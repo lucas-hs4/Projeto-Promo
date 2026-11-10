@@ -104,17 +104,6 @@ def inicializar_banco():
             );
     """)
     
-    #cursor.execute("SELECT id, nome, loja FROM produtos WHERE plataforma = 'Amazon' AND loja LIKE 'Todas%';")
-    
-    cursor.execute("SELECT id, nome, url, loja, plataforma, categoria FROM produtos;")
-    from scraper import identificar_editora
-    for pid, pnome, purl, ploja, pplataforma, pcat in cursor.fetchall():
-        nova_ed = identificar_editora(pnome, ploja) if pplataforma != "Editoras" else ploja
-        contexto_cat = purl if pplataforma == "Editoras" else nova_ed.lower()
-        nova_cat = identificar_categoria(pnome, contexto_cat, 10.0)
-        if nova_ed != ploja or nova_cat != pcat:
-            cursor.execute("UPDATE produtos SET loja = %s, categoria = %s WHERE id = %s;", (nova_ed, nova_cat, pid))
-        
     cursor.execute("DELETE FROM historico_precos WHERE preco_atual <= 0;")
     
     cursor.execute("""
@@ -139,11 +128,34 @@ def inicializar_banco():
             valor INTEGER DEFAULT 0
         );
     """)
+
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_hist_prod_data ON historico_precos(produto_id, data_consulta DESC);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_prod_plat_cat ON produtos(plataforma, categoria);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_prod_fav ON produtos(favorito) WHERE favorito = TRUE;")
     
     conexao.commit()
     cursor.close()
     conexao.close()
-    print("Banco de dados conectados e tabelas verificadas/criadas com sucesso.")
+    print("Banco de dados conectado, tabelas e índices verificados/criados com sucesso.")
+
+def reclassificar_catalogo_legado():
+    """Rotina de manutenção opcional para reclassificar editoras e categorias antigas."""
+    conexao = conectar()
+    cursor = conexao.cursor()
+    cursor.execute("SELECT id, nome, url, loja, plataforma, categoria FROM produtos;")
+    from scraper import identificar_editora
+    alterados = 0
+    for pid, pnome, purl, ploja, pplataforma, pcat in cursor.fetchall():
+        nova_ed = identificar_editora(pnome, ploja) if pplataforma != "Editoras" else ploja
+        contexto_cat = purl if pplataforma == "Editoras" else nova_ed.lower()
+        nova_cat = identificar_categoria(pnome, contexto_cat, 10.0)
+        if nova_ed != ploja or nova_cat != pcat:
+            cursor.execute("UPDATE produtos SET loja = %s, categoria = %s WHERE id = %s;", (nova_ed, nova_cat, pid))
+            alterados += 1
+    conexao.commit()
+    cursor.close()
+    conexao.close()
+    print(f"[Manutenção] Reclassificação concluída: {alterados} produtos atualizados.")
     
 def salvar_leitura(dados, conexao=None):
     """
@@ -199,6 +211,14 @@ def salvar_leitura(dados, conexao=None):
     
     ultima_leitura = cursor.fetchone()
     
+    cursor.execute("""
+        SELECT MIN(preco_atual)
+        FROM historico_precos
+        WHERE produto_id = %s AND preco_atual > 0;
+    """, (produto_id,))
+    res_menor = cursor.fetchone()
+    menor_historico = float(res_menor[0]) if (res_menor and res_menor[0] is not None) else float(dados["preco_atual"])
+    
     if float(dados["preco_atual"]) <= 0.0 and ultima_leitura is not None:
         dados["preco_atual"] = float(ultima_leitura[0])
         if float(dados["preco_original"]) < dados["preco_atual"]:
@@ -235,7 +255,7 @@ def salvar_leitura(dados, conexao=None):
     if fechar_ao_final:
         conexao.close()
     
-    return produto_id, alerta_ja_enviado, eh_favorito, preco_alvo
+    return produto_id, alerta_ja_enviado, eh_favorito, preco_alvo, menor_historico
 
 def atualizar_status_alerta(produto_id, status_booleano):
     """Liga (True) ou desliga (False) a trava de notificação de um produto."""

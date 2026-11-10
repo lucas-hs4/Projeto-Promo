@@ -2,3 +2,4 @@ venv/
 .env
 __pycache__/
 sessao_ml.json
+GEMINI.md

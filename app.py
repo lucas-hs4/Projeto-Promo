@@ -15,6 +15,7 @@ robo_em_execucao = False
 modo_atual = None
 fila_varreduras = []
 intervalo_auto_min = 0
+lock_fila = threading.Lock()
 
 REGRAS_AUTO = [
     ("rapido", "ult_wishlist", 3 * 3600, " Wishlist (3h)"),
@@ -26,15 +27,17 @@ REGRAS_AUTO = [
 def enfileirar_ou_rodar(modo):
     """Inicia a varredura imediatamente se estiver livre, ou coloca na fila de espera."""
     global robo_em_execucao
-    if not robo_em_execucao:
-        robo_em_execucao = True
-        threading.Thread(target=rodar_robo_background, args=(modo,), daemon=True).start()
-    elif modo != modo_atual and modo not in fila_varreduras:
-        fila_varreduras.append(modo)
+    with lock_fila:
+        if not robo_em_execucao:
+            robo_em_execucao = True
+            threading.Thread(target=rodar_robo_background, args=(modo,), daemon=True).start()
+        elif modo != modo_atual and modo not in fila_varreduras:
+            fila_varreduras.append(modo)
 
 def rodar_robo_background(modo="completo"):
     global robo_em_execucao, modo_atual
-    modo_atual = modo
+    with lock_fila:
+        modo_atual = modo
     try:
         agora = int(time.time())
         for m_regra, chave_db, _, _ in REGRAS_AUTO:
@@ -42,13 +45,13 @@ def rodar_robo_background(modo="completo"):
                 salvar_config(chave_db, agora)
         executar_robo(modo)
     finally:
-        if fila_varreduras:
-            proximo = fila_varreduras.pop(0)
-            threading.Thread(target=rodar_robo_background, args=(proximo,), daemon=True).start()
-        else:
-            modo_atual = None
-            robo_em_execucao = False
-        
+        with lock_fila:
+            if fila_varreduras:
+                proximo = fila_varreduras.pop(0)
+                threading.Thread(target=rodar_robo_background, args=(proximo,), daemon=True).start()
+            else:
+                modo_atual = None
+                robo_em_execucao = False
         
 def loop_agendador():
     """Verifica a cada 30s se alguma aba atingiu seu horário (3h Marketplaces / 3d Editoras)."""
@@ -203,7 +206,7 @@ def terminal_vivo():
 def status_fila():
     agora = int(time.time())
     proximos = []
-    for modo_regra, chave_db, intervalo_seg, rotulo, in REGRAS_AUTO:
+    for modo_regra, chave_db, intervalo_seg, rotulo in REGRAS_AUTO:
         ult = obter_config(chave_db, 0)
         restante = max(0, (ult + intervalo_seg) - agora) if (intervalo_auto_min > 0 and ult > 0) else -1
         proximos.append({"rotulo": rotulo, "modo": modo_regra, "restante_seg": restante})
@@ -217,7 +220,8 @@ def status_fila():
 
 @app.route("/limpar_fila", methods=["POST"])
 def limpar_fila():
-    fila_varreduras.clear()
+    with lock_fila:
+        fila_varreduras.clear()
     return jsonify({"ok": True})
 
 @app.route("/ocultar/<int:produto_id>", methods=["POST"])
