@@ -21,6 +21,7 @@
         .filtros { display: flex; gap: 15px; align-items: center; background: #13111c ;padding: 15px 25px; border-radius: 8px; margin-bottom: 25px; flex-wrap: wrap; border: 1px solid #2e2640; }
         input[type="text"], input[type="number"], select { background: #09090b ; border: 1px solid #4c3d6e; color: #fff; padding: 8px 12px; border-radius: 5px; outline: none; }
         input[type="text"]:focus, input[type="number"]:focus, select:focus {border-color: #996dff; box-shadow: 0 0 5px rgba(153, 109, 255, 0.40); }
+        option { background: #13111c; color: #e1e1e6; }
         input[type="checkbox"] { accent-color: #8257e5; }
         button, .btn-link { background: #8257e5; color: #fff; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer; font-weight: bold; text-decoration: none; transition: 0.2s; }
         button:hover, .btn-link:hover { background: #996dff; }
@@ -150,6 +151,11 @@
                 <option value="JBC" {% if loja == 'JBC' %}selected{% endif %}>JBC</option>
                 <option value="MPEG" {% if loja == 'MPEG' %}selected{% endif %}>MPEG</option>
                 <option value="Pipoca & Nanquim" {% if loja == 'Pipoca & Nanquim' %}selected{% endif %}>Pipoca & Nanquim</option>
+                <option value="Comix Zone" {% if loja == 'Comix Zone' %}selected{% endif %}>Comix Zone</option>
+                <option value="Devir" {% if loja == 'Devir' %}selected{% endif %}>Devir</option>
+                <option value="DarkSide" {% if loja == 'DarkSide' %}selected{% endif %}>DarkSide</option>
+                <option value="Eaglemoss" {% if loja == 'Eaglemoss' %}selected{% endif %}>Eaglemoss</option>
+                <option value="Mythos" {% if loja == 'Mythos' %}selected{% endif %}>Mythos</option>
                 <option value="Outras" {% if loja == 'Outras' %}selected{% endif %}>Outras Editoras</option>
             </select>
         </label>

@@ -9,33 +9,51 @@ TERMOS_IGNORADOS = [
     "figurinha", "álbum", "album","cromo", "envelope",
     "adrenalyn", "fifa", "libertadores", "brasileirão",
     "brasileirao", "copa do mundo", "seleção da copa", "starter pack",
-    "chaveiro", "pn toys", "figure",
+    "chaveiro", "pn toys", "figure", "miniatura", "estatueta",
     "usado", "seminovo", "camiseta", "caneca", "funko", "ecobag",
-    "english edition", "spanish edition", "edição inglês", "[inglês]", "importado",
-    "portuguese edition", "para colorir", "livro de colorir", "coloring book",
-    "mpeg-", "divx"
+    "english edition", "english comics", "spanish edition", "edição inglês", "[inglês]", "importado",
+    "portuguese edition", "para colorir", "livro de colorir", "coloring book", "crie e pinte", "pinte o seu",
+    "superpôster", "superposter","mpeg-", "divx"
+]
+
+EDITORAS_VALIDAS = [
+    "Panini", "JBC", "NewPOP", "Pipoca & Nanquim", "MPEG",
+    "Eaglemoss", "Devir", "DarkSide", "Mythos", "Comix Zone"
 ]
 
 def identificar_editora(texto, padrao="Outras"):
     """Descobre a editora pelo título ou mantém a editora padrão da busca."""
     t = texto.lower()
-    if any(p in t for p in [
-        "panini", "marvel", "dc comics", "dc de bolso", "dc deluxe", "turma da mônica", "graphic msp",
-        "invencível", "star wars", "homem-aranha", "batman", "superman", "x-men", "vingadores",
-        "demolidor", "wolverine", "lanterna verde", "mulher-maravilha", "deadpool", "spawn", "conan",
-        "one piece", "chainsaw man", "jujutsu kaisen", "demon slayer", "kimetsu no yaiba", "berserk",
-        "naruto", "dragon ball", "spy x family", "frieren", "dandadan", "blue lock", "vagabond",
-        "tokyo ghoul", "jojo's", "jojos", "jojo´s", "bleach remix", "one-punch man", "sakamoto days", "kagurabachi",
-        "kusuriya", "diários de uma apotecária", "hanako-kun", "vinland saga", "atelier of witch hat",
-        "gachiakuta", "20th century boys", "pluto:", "monster kanzenban", "slam dunk", "mushoku tensei",
-        "asa noturna", "detective comics", "ultimate collection", "caçador de marte", "cavaleiro da lua",
-        "dc x sonic", "vilania", "arqueiro verde", "spidey", "bungo stray dogs", "dorohedoro",
-        "undead unluck", "komi não consegue", "as quíntuplas", "granblue fantasy", "vampire knight",
-        "nisekoi", "mao vol", "we never learn", "yuuna e a pensão", "honey lemon soda", "witch watch",
-        "bug ego", "garota mágica dandelion", "black clover", "imperial vol", "claymore remix",
-        "capitão tsubasa", "tower dungeon", "hirayasumi", "tamon's b-side", "drcl", "gantz", "beastars"
+    if any( p in t for p in [
+        "eaglemoss", "dc graphic novels", "coleção oficial de graphic novels",
+        "sagas definitivas", "lendas do cavaleiro das trevas", "dpgc"
     ]):
-        return "Panini"
+        return "Eaglemoss"
+    elif any(p in t for p in [
+        "devir", "lazarus", "bitch planet", "family tree", "lumberjanes", "carta 44",
+        "skyward", "domínio público", "dead letters", "a marcha", "ancient magus",
+        "ascender", "takemitsu zamurai", "chew", "paper girls", "black science",
+        "seven to eternity", "east of west", "gideon falls", "sex criminals",
+        "wicked + the divine", "descender", "monstress", "heartstopper", "sin city"
+    ]):
+        return "Devir"
+    elif any(p in t for p in [
+        "darkside", "dark side", "condado maldito", "insetos humanos", "lady killer",
+        "green river killer", "o corvo", "joe hill", "menina submersa",
+        "todas as faces da morte", "deathdisco", "fragmentos do horror", "sensor", "bela treva"
+    ]):
+        return "DarkSide"
+    elif any(p in t for p in [
+        "mythos", "tex ", "tex:", "tex -", "tex willer", "dylan dog", "zagor",
+        "mágico vento", "ken parker", "martin mystère", "bonelli", "juiz dredd",
+        "hellblazer - origens"
+    ]):
+        return "Mythos"
+    elif any(p in t for p in [
+        "comix zone", "o muro", "saturnália", "lon chaney", "czar acidental",
+        "torpedo 1936", "paracuellos", "alack sinner", "breccia", "chabouté", "druuna"
+    ]):
+        return "Comix Zone"
     elif any(p in t for p in [
         "jbc", "hunter x hunter", "haikyu", "fullmetal alchemist", "soul eater", "akira", "death note",
         "cavaleiros do zodíaco", "saint seiya", "inuyasha", "cardcaptor sakura", "card captor sakura", "sailor moon",
@@ -45,7 +63,8 @@ def identificar_editora(texto, padrao="Outras"):
         "nana vol", "the fable", "parasyte", "skip & loafer", "medalist", "reincarnated as a slime",
         "edens zero", "final fantasy lost stranger", "dead dead demons", "fruits basket", "buda - vol",
         "kamen rider", "shimanami tasogare", "boys run the riot", "sem saída", "yu yu hakusho",
-        "akane banashi", "bendaora", "sanctuary vol", "ghost in the shell", "dragon quest"
+        "akane banashi", "bendaora", "sanctuary vol", "ghost in the shell", "dragon quest",
+        "montanhas da loucura", "rurouni kenshin", "mujina"
     ]):
         return "JBC"
     elif any(p in t for p in [
@@ -55,14 +74,18 @@ def identificar_editora(texto, padrao="Outras"):
         "a voz do silêncio", "semantic error", "um sinal de afeto", "mushishi", "toradora", "made in abyss",
         "beginning after the end", "melhor engenheiro do mundo", "greatest estate developer",
         "dangerous convenience store", "king's maker", "pink heart jam", "destino dos vilões",
-        "classroom of the elite", "no game no life", "citrus", "fuja comigo, garota"
+        "classroom of the elite", "no game no life", "citrus", "fuja comigo, garota",
+        "perfect world", "a casa do sol", "coelacanth", "girl crush", "love so pure", "kimba", "uq holder"
     ]):
         return "NewPOP"
     elif any(p in t for p in [
         "pipoca", "nanquim", "junji ito", "tomie", "uzumaki", "gyo", "shigurui", "incal",
         "tartarugas ninja", "último ronin", "lobo solitário", "chushingura", "city hunter", "cat's eye", "cão de caça",
         "the boys", "calafrios", "a lagarta", "ptsd radio", "harem end", "o vampiro que ri",
-        "anamorfose", "kanikosen", "lady snowblood", "elric", "eternauta", "thorgal"
+        "anamorfose", "kanikosen", "lady snowblood", "elric", "eternauta", "thorgal",
+        "copra", "jack kirby", "estórias gerais", "mandala de fogo", "gon:", "gon -", "gon vol",
+        "mundo sem fim", "fire! vol", "princesa do castelo sem fim", "o escultor", "watership down",
+        "replay:", "stray toasters", "torradeiras desgarradas", "guardiões do louvre"
     ]):
         return "Pipoca & Nanquim"
     elif any(p in t for p in [
@@ -71,7 +94,33 @@ def identificar_editora(texto, padrao="Outras"):
         "casamento dos vaga-lumes", "tenkaichi", "gto -"
     ]):
         return "MPEG"
-    return padrao if padrao in ["Panini", "JBC", "NewPOP", "Pipoca & Nanquim", "MPEG"] else "Outras"
+    elif any(p in t for p in [
+        "panini", "marvel", "dc comics", "dc de bolso", "dc deluxe", "dc vintage", "dc black label",
+        "grandes eventos dc", "turma da mônica", "mauricio de sousa", "cebolinha", "cascão", "magali",
+        "chico bento", "saiba mais!", "saiba mais ", "graphic msp", "invencível", "star wars", "darth vader",
+        "mandalorian", "homem-aranha", "homem de ferro", "capitão américa", "capitao america",
+        "quarteto fantástico", "surfista prateado", "viúva negra", "viuva negra", "thor", "hulk",
+        "venom", "doutor estranho", "batman", "superman", "x-men", "vingadores", "demolidor",
+        "wolverine", "lanterna verde", "mulher-maravilha", "liga da justiça", "flash", "coringa",
+        "sandman", "arlequina", "watchmen", "robin", "shazam", "esquadrão suicida", "deadpool",
+        "spawn", "conan", "espada selvagem", "kull", "walking dead", "one piece", "chainsaw man",
+        "jujutsu kaisen", "demon slayer", "kimetsu no yaiba", "berserk", "naruto", "dragon ball",
+        "spy x family", "frieren", "dandadan", "blue lock", "vagabond", "tokyo ghoul", "jojo's",
+        "jojos", "jojo´s", "bleach remix", "one-punch man", "one punch man", "sakamoto days", "kagurabachi",
+        "kusuriya", "diários de uma apotecária", "hanako-kun", "vinland saga", "atelier of witch hat",
+        "gachiakuta", "20th century boys", "pluto:", "monster kanzenban", "slam dunk", "mushoku tensei",
+        "asa noturna", "detective comics", "ultimate collection", "caçador de marte", "cavaleiro da lua",
+        "dc x sonic", "vilania", "arqueiro verde", "spidey", "bungo stray dogs", "dorohedoro",
+        "undead unluck", "komi não consegue", "as quíntuplas", "granblue fantasy", "vampire knight",
+        "nisekoi", "mao vol", "we never learn", "yuuna e a pensão", "honey lemon soda", "witch watch",
+        "bug ego", "garota mágica dandelion", "black clover", "imperial vol", "claymore remix",
+        "capitão tsubasa", "tower dungeon", "hirayasumi", "tamon's b-side", "drcl", "gantz", "beastars",
+        "vampiro americano", "atos de maldade", "império secreto", "blade runner", "pássaros que cantam",
+        "injustiça", "starman", "kingdom hearts", "kamandi", "razão e sensibilidade", "waller vs",
+        "miracleman", "flintstones", "providence", "aquaman", "legião dos super-heróis", "my home hero"
+    ]):
+        return "Panini"
+    return padrao if padrao in EDITORAS_VALIDAS else "Outras"
 
 def extrair_panini(pagina, url_produto):
     print(f"Consultando:: {url_produto}...")
@@ -240,46 +289,63 @@ def identificar_categoria(nome, url_contexto="", preco_atual=10.0):
     if 0 < preco_atual < 1.0 or any(termo in texto for termo in TERMOS_IGNORADOS):
         return "Excluídos"
     
-    if "tartarugas ninja" in texto or "ultimo ronin" in texto or "último ronin" in texto:
+    if any(t in texto for t in [
+        "tartarugas ninja", "ultimo ronin", "último ronin"
+        ]):
         return "As Tartarugas Ninja"
-    if "/disney" in texto or "disney" in texto or any(d in texto for d in [
-        "mickey", "pato donald", "donald", "ducktales", "duck tales", "mickey e pateta",
+    elif any(d in texto for d in [
+        "/disney", "disney", "mickey", "pato donald", "donald", "ducktales", "duck tales", "mickey e pateta",
         "tio patinhas", "minnie", "pateta", "19.999 léguas submarinas", "histórias de esportes"
     ]):
         return "Disney"
-    if "/invencivel" in texto or "invencível" in texto or "invencivel" in texto:
+    elif any(i in texto for i in [
+        "/invencivel", "invencível", "invencivel" 
+    ]):
         return "Invencível"
-    elif "/spawn" in texto or "spawn" in texto:
+    elif any(s in texto for s in[
+        "/spawn", "spawn"
+    ]):
         return "Spawn"
-    elif "/conan" in texto or "conan" in texto or "espada selvagem" in texto or "kull" in texto:
+    elif any(c in texto for c in [
+        "/conan", "conan", "espada selvagem", "kull"
+    ]):
         return "Conan"
-    elif "/star-wars" in texto or "star wars" in texto or "mandalorian" in texto or "darth vader" in texto:
+    elif any(w in texto for w in [
+        "/star-wars", "star wars", "mandalorian", "darth vader"
+    ]):
         return "Star Wars"
-    elif "/the-walking-dead" in texto or "walking dead" in texto:
+    elif any(t in texto for t in [
+        "/the-walking-dead", "walking dead"
+    ]):
         return "The Walking Dead"
-    elif "/marvel" in texto or any(h in texto for h in [
-        "marvel", "homem-aranha","homem de ferro", "viúva negra", "viuva negra",
+    elif any(h in texto for h in [
+        "/marvel", "marvel", "homem-aranha","homem de ferro", "viúva negra", "viuva negra",
         "viúva-negra", "aranha", "vingadores", "x-men", "wolverine", "demolidor",
         "thor", "capitão américa", "capitao américa", "hulk", "deadpool", "quarteto fantástico",
         "surfista prateado", "venom", "doutor estranho"
     ]):
         return "Marvel"
-    elif "/dc-comics" in texto or "dc+comics" in texto or any(h in texto for h in [
-        "dc", "batman", "superman", "mulher-maravilha", "liga da justiça", "flash", "lanterna verde",
+    elif any(h in texto for h in [
+        "/dc-comics", "dc+comics", "dc", "batman", "superman", "mulher-maravilha", "liga da justiça", "flash", "lanterna verde",
         "asa noturna", "coringa", "sandman", "arlequina", "watchmen", "juízo final", "heróis em crise",
         "herois em crise", "robin", "shazam", "a saga dos superfilhos", "gordon: lei & ordem", "esquadrão suicida"
     ]):
         return "DC Comics"
-    elif "/planet-manga" in texto or "planet+manga" in texto or "lojanewpop" in texto or "mpeg.com.br" in texto or "mangas.html" in texto or any(m in texto for m in [
-        "junji ito", "shigurui", "city hunter", "cat's eye", "cats eye", "chushingura", "battle royale", "one piece",
+    elif any(m in texto for m in [
+        "/planet-manga", "planet+manga", "lojanewpop", "mpeg", "mangas.html", "junji ito", "shigurui", "city hunter", "cat's eye", "cats eye", "chushingura", "battle royale", "one piece",
         "berserk", "naruto", "dragon ball", "demon slayer", "jujutsu", "tokyo ghoul", "chainsaw man", "mashle", "re:zero",
         "katana beast", "record of ragnarok", "one punch man", "hokuto no ken", "the ghost in the shell", "devil exstasy",
         "zero no tsukaima", "aku no hana", "ragna crimson", "tower of god"
     ]):
         return "Mangás"
-    elif "/mauricio-de-sousa-catalogo" in texto or "mauricio" in texto or "mônica" in texto or "monica" in texto or "cebolinha" in texto or "cascão" in texto or "magali" in texto or "chico bento" in texto or "xaveco" in texto or "tina" in texto or "saiba mais" in texto:
+    elif any(m in texto for m in [
+        "/mauricio-de-sousa-catalogo", "mauricio", "mônica", "monica", "cebolinha", "cascão", "magali",
+        "chico bento", "xaveco", "tina", "saiba mais"
+    ]):
         return "Turma da Mônica"
-    elif "/panini-books" in texto or "/novels" in texto or "novel" in texto or "livro" in texto or "livros.html" in texto or "livrosnovels" in texto:
+    elif any(l in texto for l in [
+        "/panini-books", "/novels", "novel", "livro", "livros.html", "livrosnovels"
+    ]):
         return "Novels & Livros"
     else:
         return "Outros"
@@ -955,7 +1021,7 @@ def extrair_amazon(pagina, url_produto):
         disponivel = preco_atual > 0.0 and pagina.locator("#add-to-cart-button, #buy-now-button").count() > 0
         status_estoque = "Em estoque" if disponivel else "Indisponível"
         
-        texto_pag = pagina.locator("#bylineInfo, #detailBullets_feature_div").all_inner_texts()
+        texto_pag = pagina.locator("#bylineInfo, #detailBullets_feature_div, #rpi-attribute-book_details-publisher").all_inner_texts()
         texto_ed = " ".join(texto_pag).lower()
         editora = identificar_editora(f"{titulo} {texto_ed}", "Outras")
         
@@ -1126,7 +1192,7 @@ def extrair_mercadolivre(pagina, url_produto):
         disponivel = preco_atual > 0.0 and pagina.locator("button.ui-pdp-action--primary").count() > 0
 
         texto_t = titulo.lower()
-        editora = "JBC" if "jbc" in texto_t else ("NewPOP" if "newpop" in texto_t else ("Pipoca & Nanquim" if "pipoca" in texto_t else ("MPEG" if "mpeg" in texto_t else "Panini")))
+        editora = identificar_editora(titulo, "Outras")
 
         return {
             "plataforma": "Mercado Livre",

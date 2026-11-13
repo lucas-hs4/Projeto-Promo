@@ -105,8 +105,8 @@ BUSCAS_AMAZON = [
     ("JBC", f"https://www.amazon.com.br/s?k=jbc&i=stripbooks&rh=n%3A6740748011%2Cn%3A7842710011%2Cn%3A7842726011&s=relevancerank&dc&ds=v1%3AOwyQaxpI%2BV8goUkjvkbIZkA2uhyC%2FRZSKD4H%2Fany3yw&Adv-Srch-Books-Submit.x=61&Adv-Srch-Books-Submit.y=11&qid=1793305864&rnid=7842710011&unfiltered=1&ref=sr_nr_n_1"), #JBC - Graphic Novel
     ("Pipoca & Nanquim", f"https://www.amazon.com.br/s?k=pipoca+%26+nanquim&i=stripbooks&rh=n%3A7842710011&s=relevancerank&Adv-Srch-Books-Submit.x=27&Adv-Srch-Books-Submit.y=5&unfiltered=1&ref=sr_adv_b"),
     ("MPEG", f"https://www.amazon.com.br/s?k=mpeg&i=stripbooks&rh=n%3A7842710011&s=relevancerank&Adv-Srch-Books-Submit.x=0&Adv-Srch-Books-Submit.y=0&unfiltered=1&ref=sr_adv_b"),
-    ("Outras", f"https://www.amazon.com.br/s?k=darkside&i=stripbooks&rh=n%3A7842710011&s=relevancerank&Adv-Srch-Books-Submit.x=37&Adv-Srch-Books-Submit.y=6&unfiltered=1&ref=sr_adv_b"), #DarkSide
-    ("Outras", f"https://www.amazon.com.br/s?k=comix+zone&i=stripbooks&rh=n%3A7842710011&s=relevancerank&Adv-Srch-Books-Submit.x=57&Adv-Srch-Books-Submit.y=5&unfiltered=1&ref=sr_adv_b"), #Comix Zone
+    ("DarkSide", f"https://www.amazon.com.br/s?k=darkside&i=stripbooks&rh=n%3A7842710011&s=relevancerank&Adv-Srch-Books-Submit.x=37&Adv-Srch-Books-Submit.y=6&unfiltered=1&ref=sr_adv_b"),
+    ("Comix Zone", f"https://www.amazon.com.br/s?k=comix+zone&i=stripbooks&rh=n%3A7842710011&s=relevancerank&Adv-Srch-Books-Submit.x=57&Adv-Srch-Books-Submit.y=5&unfiltered=1&ref=sr_adv_b"),
 ]
 
 BUSCAS_MERCADOLIVRE = [
