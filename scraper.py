@@ -1,5 +1,6 @@
 import random
 import json
+import urllib.parse
 from playwright.sync_api import sync_playwright
 
 cancelar_varredura = False
@@ -591,95 +592,134 @@ def extrair_jbc(pagina, url_produto):
         print(f"   [Erro] Falhar ao ler produto JBC {url_produto}: {erro}")
         return None
     
+def _consultar_graphql_jbc(pagina, op_name, op_hash, variaveis):
+    """Executa uma consutla GraphQL direta na vitrine VTEX na Companhia das Letras."""
+    v_str = urllib.parse.quote(json.dumps(variaveis, separators=(",", ":")))
+    api_url = (
+        f"https://www.companhiadasletras.com.br/api/graphql"
+        f"?operationName={op_name}&operationHash={op_hash}&variables={v_str}"
+    )
+    resp = pagina.request.get(api_url, timeout=30000)
+    if resp.status != 200:
+        return {}
+    return resp.json().get("data", {}).get("search", {})
+
+
 def extrair_vitrine_jbc(pagina, url_inicial, max_cliques=90, urls_vistas=None):
     """
     Crawler para a vitrine da JBC na Companhia das Letras.
-    Clica em 'Ver mais' e para sozinho assim que os títulos começarem a repetir.
+    Captura os hashes GraphQL e consulta em lotes de 100 particionados por ano
+    para contornar o limite de 1.000 itens de VTEX Intelligent Search.
     """
     produtos_extraidos = []
     if urls_vistas is None:
         urls_vistas = set()
         
-    nos_fila = []
+    hashes = {
+        "ClientProductGalleryQuery": "bfc40da32b60f9404a4adb96b0856e3fbb04b076",
+        "ClientManyProductsQuery": "cf1dd08606442e0d3dd14a288913d0cd636479c4",
+    }
 
-    def capturar_graphql(resposta):
-        if "graphql" in resposta.url and resposta.status == 200:
-            try:
-                d = resposta.json()
-                edges = d.get("data", {}).get("search", {}).get("products", {}).get("edges", [])
-                for e in edges:
-                    if "node" in e:
-                        nos_fila.append(e["node"])
-            except Exception:
-                pass
+    def capturar_hashes(requisicao):
+        if "/api/graphql" in requisicao.url and "operationName=" in requisicao.url:
+            qs = urllib.parse.parse_qs(urllib.parse.urlparse(requisicao.url).query)
+            op = qs.get("operationName", [""])[0]
+            h = qs.get("operationHash", [""])[0]
+            if op in hashes and h:
+                hashes[op] = h
             
-    pagina.on("response", capturar_graphql)
+    pagina.on("request", capturar_hashes)
     
     try:
         print(f"\n[JBC] Abrindo vitrine: {url_inicial}...")
         pagina.goto(url_inicial, wait_until="domcontentloaded", timeout=60000)
-        
-        loc_next = pagina.locator("script#__NEXT_DATA__")
-        if loc_next.count() > 0:
-            dados_iniciais = json.loads(loc_next.inner_text())
-            edges_ini = dados_iniciais.get("props", {}).get("pageProps", {}).get("data", {}).get("search", {}).get("products", {}).get("edges", [])
-            for e in edges_ini:
-                if "node" in e:
-                    nos_fila.append(e["node"])
-        
         pagina.evaluate("window.scrollTo(0, 900)")
-        pagina.wait_for_timeout(2000)
-                    
-        clique_num = 0
+        pagina.wait_for_timeout(2500)
+        
+        facetas_base = [
+            {"key": "brand", "value": "jbc"},
+            {"key": "fuzzy", "value": "0"},
+            {"key": "operator", "value": "and"},
+            {"key": "channel", "value": '{"salesChannel":"1","regionId":""}'},
+            {"key": "locale", "value": "pt-BR"},
+        ]
+        
+        dados_gal = _consultar_graphql_jbc(
+            pagina,
+            "ClientProductGalleryQuery",
+            hashes["ClientProductGalleryQuery"],
+            {
+                "first": 1,
+                "after": "0",
+                "sort": "score_desc",
+                "term": "",
+                "selectedFacets": facetas_base,
+                "sponsoredCount": 3,
+            },
+        )
+        anos = []
+        for faceta in dados_gal.get("facets", []):
+            if faceta.get("key") == "ano-de-publicacao":
+                anos = [v["value"] for v in faceta.get("values", []) if v.get("value")]
+        
+        consultas = [
+            (f"Ano {ano}", "score_desc", facetas_base + [{"key": "ano-de-publicacao", "value": ano}])
+            for ano in anos
+        ]
+        if not consultas:
+            consultas = [
+                ("Preço Crescente", "price_asc", facetas_base),
+                ("Preço Descrecente", "price_desc", facetas_base),
+            ]
+        
         urls_jbc_sessao = set()
-        while clique_num <= max_cliques:
+        for rotulo, sort_modo, facetas in consultas:
             if cancelar_varredura:
                 print("   [Parada] Varredura interrompida pelo usuário.")
                 break
             
-            novos_neste_lote = 0
-            while nos_fila:
-                no = nos_fila.pop(0)
-                prod = converter_no_jbc(no)
-                if prod and prod["url"] not in urls_jbc_sessao:
-                    urls_jbc_sessao.add(prod["url"])
-                    novos_neste_lote += 1
-                    if prod["url"] not in urls_vistas:
-                        urls_vistas.add(prod["url"])
-                        produtos_extraidos.append(prod)
-                    
-            print(f"[JBC] Lote {clique_num + 1}: +{novos_neste_lote} mangás inéditos (Total JBC: {len(produtos_extraidos)}).")
-            
-            if clique_num > 0 and novos_neste_lote == 0:
-                print("[JBC] Fim do catálogo atingido (títulos repetidos detectados). Encerrando JBC!")
-                break
-            
-            if clique_num >= max_cliques:
-                break
-
-            pagina.evaluate("window.scrollTo(0, document.body.scrollHeight - 600)")
-            pagina.wait_for_timeout(800)
-            botao_mais = pagina.locator("a:has-text('Ver mais'), button:has-text('Ver mais')").last
-            if botao_mais.count() == 0:
-                print("[JBC] Botão 'Ver mais' não existe mais na página. Fim da vitrine!")
-                break
-            
-            clique_num += 1
-            botao_mais.evaluate("el => { el.scrollIntoView(); el.click(); }")
-            
-            for tentativa in range(24):
-                pagina.wait_for_timeout(500)
-                if len(nos_fila) > 0:
+            novos_bloco = 0
+            offset = 0
+            while offset < 1000:
+                if cancelar_varredura:
                     break
-                if tentativa == 10 and botao_mais.count() > 0:
-                    botao_mais.evaluate("el => { el.scrollIntoView(); el.click(); }")
-            pagina.wait_for_timeout(400)
+                busca = _consultar_graphql_jbc(
+                    pagina,
+                    "ClientManyProductsQuery",
+                    hashes["ClientManyProductsQuery"],
+                    {
+                        "first": 100,
+                        "after": str(offset),
+                        "sort": sort_modo,
+                        "term": "",
+                        "selectedFacets": facetas,
+                        "sponsoredCount": 3,
+                    },
+                )
+                edges = busca.get("products", {}).get("edges", [])
+                if not edges:
+                    break
+                
+                for edge in edges:
+                    prod = converter_no_jbc(edge.get("node", {}))
+                    if prod and prod["url"] not in urls_jbc_sessao:
+                        urls_jbc_sessao.add(prod["url"])
+                        novos_bloco += 1
+                        if prod["url"] not in urls_vistas:
+                            urls_vistas.add(prod["url"])
+                            produtos_extraidos.append(prod)
+                
+                if len(edges) < 100:
+                    break
+                offset += 100
+                
+            print(f"[JBC] {rotulo}: +{novos_bloco} obras (Total JBC: {len(produtos_extraidos)}).")
 
             
     except Exception as erro:
         print(f"   [Erro de Rede] Falha na vitrine JBC: {erro}")
     finally:
-        pagina.remove_listener("response", capturar_graphql)    
+        pagina.remove_listener("request", capturar_hashes)    
     
     return produtos_extraidos
 

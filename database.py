@@ -148,7 +148,7 @@ def reclassificar_catalogo_legado():
     for pid, pnome, purl, ploja, pplataforma, pcat in cursor.fetchall():
         nova_ed = identificar_editora(pnome, ploja) if pplataforma != "Editoras" else ploja
         contexto_cat = purl if pplataforma == "Editoras" else nova_ed.lower()
-        nova_cat = identificar_categoria(pnome, contexto_cat, 10.0)
+        nova_cat = "Excluídos" if pcat == "Excluídos" else identificar_categoria(pnome, contexto_cat, 10.0)
         if nova_ed != ploja or nova_cat != pcat:
             cursor.execute("UPDATE produtos SET loja = %s, categoria = %s WHERE id = %s;", (nova_ed, nova_cat, pid))
             alterados += 1
@@ -184,12 +184,13 @@ def salvar_leitura(dados, conexao=None):
                 ELSE produtos.imagem_url
             END,
             categoria = CASE
+                WHEN produtos.categoria = 'Excluídos' THEN 'Excluídos'
                 WHEN EXCLUDED.categoria IN ('Geral', 'Outros')
-                    AND produtos.categoria NOT IN ('Geral', 'Outros', 'Excluídos')
+                    AND produtos.categoria NOT IN ('Geral', 'Outros')
                 THEN produtos.categoria
                 ELSE EXCLUDED.categoria
             END
-        RETURNING id, (alerta_enviado AND ultimo_alerta IS NOT NULL AND ultimo_alerta > NOW() - INTERVAL '3 days'), favorito, COALESCE(preco_alvo, 0.0), titulo_editado;
+        RETURNING id, (alerta_enviado AND ultimo_alerta IS NOT NULL AND ultimo_alerta > NOW() - INTERVAL '3 days'), favorito, COALESCE(preco_alvo, 0.0), titulo_editado, categoria;
     """
     cursor.execute(sql_produto, (dados["nome"], dados["url"], loja, plataforma, imagem_url, categoria))
     
@@ -200,6 +201,7 @@ def salvar_leitura(dados, conexao=None):
     preco_alvo = float(resultado_produto[3])
     if resultado_produto[4]:
         dados["nome"] = resultado_produto[4]
+    dados["categoria"] = resultado_produto[5]
     
     cursor.execute("""
         SELECT preco_atual, disponivel, status_estoque
@@ -330,13 +332,18 @@ def listar_ofertas(desconto_min=0, preco_min=0.0, preco_max=0.0, busca="", loja=
         
         #adicionar "LIMIT 200" depois de DESC e ASC para agilizar o site
     if ordem == "preco_menor":
-        sql += " ORDER BY preco_atual ASC, desconto_pct DESC"
+        sql += " ORDER BY preco_atual ASC, disponivel DESC, desconto_pct DESC"
     elif ordem == "nome":
-        sql += " ORDER BY nome ASC"
+        sql += r""" 
+            ORDER BY REGEXP_REPLACE(
+                REGEXP_REPLACE(unaccent(LOWER(nome)), '([0-9]+)', '0000000000\1', 'g'),
+                '0+([0-9]{10})', '\1', 'g'
+                ) ASC, nome ASC
+            """
     elif ordem == "recentes":
-        sql += " ORDER BY data_consulta DESC, desconto_pct DESC"
+        sql += " ORDER BY data_consulta DESC, disponivel DESC, desconto_pct DESC"
     else:
-        sql += " ORDER BY desconto_pct DESC, preco_atual ASC"
+        sql += " ORDER BY desconto_pct DESC, disponivel DESC, preco_atual ASC"
         
     offset = (pagina - 1) * por_pagina
     sql += " LIMIT %s OFFSET %s;"
