@@ -133,6 +133,23 @@ def inicializar_banco():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_prod_plat_cat ON produtos(plataforma, categoria);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_prod_fav ON produtos(favorito) WHERE favorito = TRUE;")
     
+    cursor.execute("""
+        ALTER TABLE produtos
+        ADD COLUMN IF NOT EXISTS menor_preco NUMERIC(10, 2) DEFAULT 0.0;
+    """)
+    
+    cursor.execute("""
+        UPDATE produtos p
+        SET menor_preco = sub.min_p
+        FROM (
+            SELECT produto_id, MIN(preco_atual) AS min_p
+            FROM historico_precos
+            WHERE preco_atual > 0
+            GROUP BY produto_id
+        ) sub
+        WHERE p.id = sub.produto_id AND (p.menor_preco IS NULL OR p.menor_preco <= 0);
+    """)
+    
     conexao.commit()
     cursor.close()
     conexao.close()
@@ -157,7 +174,7 @@ def reclassificar_catalogo_legado():
     conexao.close()
     print(f"[Manutenção] Reclassificação concluída: {alterados} produtos atualizados.")
     
-def salvar_leitura(dados, conexao=None):
+def salvar_leitura(dados, conexao=None, comitar=True):
     """
     Cadastra ou atualiza o produto na tabela 'produtos' e 
     insere um novo registro temporal em 'historico_precos'.
@@ -190,7 +207,7 @@ def salvar_leitura(dados, conexao=None):
                 THEN produtos.categoria
                 ELSE EXCLUDED.categoria
             END
-        RETURNING id, (alerta_enviado AND ultimo_alerta IS NOT NULL AND ultimo_alerta > NOW() - INTERVAL '3 days'), favorito, COALESCE(preco_alvo, 0.0), titulo_editado, categoria;
+        RETURNING id, (alerta_enviado AND ultimo_alerta IS NOT NULL AND ultimo_alerta > NOW() - INTERVAL '3 days'), favorito, COALESCE(preco_alvo, 0.0), titulo_editado, categoria, COALESCE(menor_preco, 0.0);
     """
     cursor.execute(sql_produto, (dados["nome"], dados["url"], loja, plataforma, imagem_url, categoria))
     
@@ -202,6 +219,7 @@ def salvar_leitura(dados, conexao=None):
     if resultado_produto[4]:
         dados["nome"] = resultado_produto[4]
     dados["categoria"] = resultado_produto[5]
+    menor_salvo = float(resultado_produto[6])
     
     cursor.execute("""
         SELECT preco_atual, disponivel, status_estoque
@@ -213,19 +231,19 @@ def salvar_leitura(dados, conexao=None):
     
     ultima_leitura = cursor.fetchone()
     
-    cursor.execute("""
-        SELECT MIN(preco_atual)
-        FROM historico_precos
-        WHERE produto_id = %s AND preco_atual > 0;
-    """, (produto_id,))
-    res_menor = cursor.fetchone()
-    menor_historico = float(res_menor[0]) if (res_menor and res_menor[0] is not None) else float(dados["preco_atual"])
     
     if float(dados["preco_atual"]) <= 0.0 and ultima_leitura is not None:
         dados["preco_atual"] = float(ultima_leitura[0])
         if float(dados["preco_original"]) < dados["preco_atual"]:
             dados["preco_original"] = dados["preco_atual"]
         dados["desconto_pct"] = round(((dados["preco_original"] - dados["preco_atual"]) / dados["preco_original"]) * 100) if dados["preco_original"] > dados["preco_atual"] else 0
+    
+    preco_lido = float(dados["preco_atual"])
+    if preco_lido > 0 and (menor_salvo <= 0 or preco_lido < menor_salvo):
+        menor_historico = preco_lido
+        cursor.execute("UPDATE produtos SET menor_preco = %s WHERE id = %s;", (preco_lido, produto_id))
+    else:
+        menor_historico = menor_salvo if menor_salvo > 0 else preco_lido
     
     mudou_estado = (
         ultima_leitura is None
@@ -252,16 +270,19 @@ def salvar_leitura(dados, conexao=None):
             dados["disponivel"]
         ))
     
-    conexao.commit()
+    if fechar_ao_final or comitar:
+        conexao.commit()
     cursor.close()
     if fechar_ao_final:
         conexao.close()
     
     return produto_id, alerta_ja_enviado, eh_favorito, preco_alvo, menor_historico
 
-def atualizar_status_alerta(produto_id, status_booleano):
+def atualizar_status_alerta(produto_id, status_booleano, conexao=None, comitar=True):
     """Liga (True) ou desliga (False) a trava de notificação de um produto."""
-    conexao = conectar()
+    fechar_ao_final = conexao is None
+    if fechar_ao_final:
+        conexao = conectar()
     cursor = conexao.cursor()
     
     cursor.execute("""
@@ -271,12 +292,13 @@ def atualizar_status_alerta(produto_id, status_booleano):
         WHERE id = %s;
     """, (status_booleano, status_booleano, produto_id))
     
-    
-    conexao.commit()
+    if fechar_ao_final or comitar:
+        conexao.commit()
     cursor.close()
-    conexao.close()
+    if fechar_ao_final:
+        conexao.close()
     
-def listar_ofertas(desconto_min=0, preco_min=0.0, preco_max=0.0, busca="", loja="", categoria="", apenas_disponiveis=False, apenas_favoritos=False, ordem="desconto", pagina=1, por_pagina=48, plataforma="Editoras"):
+def listar_ofertas(desconto_min=0, preco_min=0.0, preco_max=0.0, busca="", loja="", categoria="", apenas_disp=False, apenas_favoritos=False, ordem="desconto", pagina=1, por_pagina=48, plataforma="Editoras"):
     """
     Busca todos os produtos com sua leitura mais recente,
     aplicando filtros de desconto, nome e estoque.
@@ -284,22 +306,46 @@ def listar_ofertas(desconto_min=0, preco_min=0.0, preco_max=0.0, busca="", loja=
     conexao = conectar()
     cursor = conexao.cursor(cursor_factory=RealDictCursor)
     
-    sql = """
+    filtros_prod = ["unaccent(COALESCE(NULLIF(p.titulo_editado, ''), p.nome)) ILIKE unaccent(%s)"]
+    parametros = [f"%{busca}%"]
+    
+    if loja:
+        filtros_prod.append("p.loja = %s")
+        parametros.append(loja)
+    
+    if plataforma == "Wishlist":
+        filtros_prod.append("p.favorito = TRUE")
+    elif plataforma and plataforma != "Todas":
+        filtros_prod.append("p.plataforma = %s")
+        parametros.append(plataforma)
+    
+    if categoria:
+        filtros_prod.append("p.categoria = %s")
+        parametros.append(categoria)
+    else:
+        filtros_prod.append("p.categoria != 'Excluídos'")
+    
+    if apenas_favoritos:
+        filtros_prod.append("p.favorito = TRUE")
+        
+    where_prod = " AND ".join(filtros_prod)
+    
+    sql = f"""
         SELECT COUNT(*) OVER() AS total_geral, * FROM (
             SELECT DISTINCT ON (p.id)
                 p.id, COALESCE(NULLIF(p.titulo_editado, ''), p.nome) AS nome, p.nome AS nome_original, COALESCE(p.titulo_editado, '') AS titulo_editado, p.url, p.loja, p.plataforma, p.imagem_url, p.categoria, p.favorito,
                 COALESCE(p.preco_alvo, 0.0) AS preco_alvo,
                 h.preco_original, h.preco_atual, h.desconto_pct,
                 h.status_estoque, h.disponivel, h.data_consulta,
-                COALESCE(MIN(h.preco_atual) FILTER (WHERE h.preco_atual > 0) OVER (PARTITION BY p.id), h.preco_atual) AS menor_preco
+                CASE WHEN p.menor_preco > 0 THEN p.menor_preco ELSE h.preco_atual END AS menor_preco
             FROM produtos p
             JOIN historico_precos h ON p.id = h.produto_id
+            WHERE {where_prod}
             ORDER BY p.id, h.data_consulta DESC
         ) AS ultimas_leituras
         WHERE desconto_pct >= %s
-          AND unaccent(nome) ILIKE unaccent(%s)
     """
-    parametros = [desconto_min, f"%{busca}%"]
+    parametros.append(desconto_min)
     
     if preco_min > 0:
         sql += " AND preco_atual >= %s"
@@ -308,27 +354,10 @@ def listar_ofertas(desconto_min=0, preco_min=0.0, preco_max=0.0, busca="", loja=
     if preco_max > 0:
         sql += " AND preco_atual <= %s"
         parametros.append(preco_max)
-    
-    if loja:
-        sql += " AND loja = %s"
-        parametros.append(loja)
-    
-    if plataforma == "Wishlist":
-        sql += " AND favorito = TRUE"
-    elif plataforma and plataforma != "Todas":
-        sql += " AND plataforma = %s"
-        parametros.append(plataforma)
-    
-    if categoria:
-        sql += " AND categoria = %s"
-        parametros.append(categoria)
-    else:
-        sql += " AND categoria != 'Excluídos'"
         
-    if apenas_disponiveis:
+    if apenas_disp:
         sql += " AND disponivel = TRUE"
         
-    if apenas_favoritos:sql += " AND favorito = TRUE"
         
         #adicionar "LIMIT 200" depois de DESC e ASC para agilizar o site
     if ordem == "preco_menor":
@@ -483,7 +512,16 @@ def obter_config(chave, padrao=0):
     linha = cursor.fetchone()
     cursor.close()
     conexao.close()
-    return linha[0] if linha else 0
+    return linha[0] if linha else padrao
+
+def obter_configs():
+    conexao = conectar()
+    cursor = conexao.cursor()
+    cursor.execute("SELECT chave, valor FROM configuracoes;")
+    configs = dict(cursor.fetchall())
+    cursor.close()
+    conexao.close()
+    return configs
 
 def salvar_config(chave, valor):
     conexao = conectar()

@@ -326,11 +326,15 @@ def identificar_categoria(nome, url_contexto="", preco_atual=10.0):
     ]):
         return "Marvel"
     elif any(h in texto for h in [
-        "/dc-comics", "dc+comics", "dc", "batman", "superman", "mulher-maravilha", "liga da justiça", "flash", "lanterna verde",
+        "/dc-comics", "dc+comics", "dc ", " dc", "(dc)", "batman", "superman", "mulher-maravilha", "liga da justiça", "flash", "lanterna verde",
         "asa noturna", "coringa", "sandman", "arlequina", "watchmen", "juízo final", "heróis em crise",
         "herois em crise", "robin", "shazam", "a saga dos superfilhos", "gordon: lei & ordem", "esquadrão suicida"
     ]):
         return "DC Comics"
+    elif any(l in texto for l in [
+        "/panini-books", "/novels", "novel", "livro", "livros.html", "livrosnovels"
+    ]):
+        return "Novels & Livros"
     elif any(m in texto for m in [
         "/planet-manga", "planet+manga", "lojanewpop", "mpeg", "mangas.html", "junji ito", "shigurui", "city hunter", "cat's eye", "cats eye", "chushingura", "battle royale", "one piece",
         "berserk", "naruto", "dragon ball", "demon slayer", "jujutsu", "tokyo ghoul", "chainsaw man", "mashle", "re:zero",
@@ -343,10 +347,6 @@ def identificar_categoria(nome, url_contexto="", preco_atual=10.0):
         "chico bento", "xaveco", "tina", "saiba mais"
     ]):
         return "Turma da Mônica"
-    elif any(l in texto for l in [
-        "/panini-books", "/novels", "novel", "livro", "livros.html", "livrosnovels"
-    ]):
-        return "Novels & Livros"
     else:
         return "Outros"
 
@@ -669,7 +669,6 @@ def _consultar_graphql_jbc(pagina, op_name, op_hash, variaveis):
     if resp.status != 200:
         return {}
     return resp.json().get("data", {}).get("search", {})
-
 
 def extrair_vitrine_jbc(pagina, url_inicial, max_cliques=90, urls_vistas=None):
     """
@@ -1100,8 +1099,8 @@ def extrair_vitrine_mercadolivre(pagina, url_inicial, editora_padrao="Panini", m
             if item ["url"] not in urls_ml_sessao:
                 urls_ml_sessao.add(item["url"])
                 novos_neste_lote += 1
-                if item["url"] in urls_vistas:
-                    continue
+            if item["url"] in urls_vistas:
+                continue
             urls_vistas.add(item["url"])
 
             preco_atual = limpar_preco_br(item["preco_txt"])

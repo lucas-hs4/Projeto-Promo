@@ -123,11 +123,11 @@ URLS_INDIVIDUAIS = [
     #"https://panini.com.br/a-essencia-do-medo-marvel-essenciais",
 ]
 
-def processar_produto(dados, conexao=None):
+def processar_produto(dados, conexao=None, comitar=True):
     """Salva o quadrinho no PostgreSQL e gerencia a trava de notificação."""
     if dados.get("plataforma", "Editoras") != "Editoras" and dados.get("categoria") == "Excluídos":
         return 
-    prod_id, alerta_ja_enviada, eh_favorito, preco_alvo, menor_historico = salvar_leitura(dados, conexao)
+    prod_id, alerta_ja_enviada, eh_favorito, preco_alvo, menor_historico = salvar_leitura(dados, conexao, comitar=comitar)
     dados["eh_menor_historico"] = dados["preco_atual"] <= menor_historico and dados["desconto_pct"] > 0
     estrela = "⭐ " if eh_favorito else ""
     alvo_txt = f" [🎯 Alvo: R$ {preco_alvo:.2f}]" if preco_alvo > 0 else ""
@@ -148,13 +148,13 @@ def processar_produto(dados, conexao=None):
             recorde_txt = " 🔥 (MENOR PREÇO HISTÓRICO!)" if dados["eh_menor_historico"] else ""
             print(f" >>> NOVA PROMOÇÂO ({dados['desconto_pct']}% OFF){recorde_txt}! Disparando Alerta...")
             enviar_alerta_ntfy(dados, meta_desconto, eh_favorito)
-            atualizar_status_alerta(prod_id, True)
+            atualizar_status_alerta(prod_id, True, conexao=conexao, comitar=comitar)
         else:
             print(" === Promoção já notificada anteriormente.")
     else:
         if alerta_ja_enviada:
             print(" --- Promoção encerrada ou esgotou. Resetando trava de alerta!")
-            atualizar_status_alerta(prod_id, False)
+            atualizar_status_alerta(prod_id, False, conexao=conexao, comitar=comitar)
 
 import os
 import scraper
@@ -209,7 +209,26 @@ def executar_robo(modo="completo"):
         contexto.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined});")
         
         pagina = contexto.new_page()
-        pagina.route("**/*", lambda route: route.abort() if (route.request.resource_type in ["image", "media"] and "mercadolivre" not in route.request.url) else route.continue_())
+        BLOQUEIO_REDE = (
+            "googletagmanager", "google-analytics", "doubleclick", "facebook.net",
+            "fbevents", "hotjar", "clarity.ms", "criteo", "amazon-adsystem",
+            "tiktok.com", "bing.com", "optimizely", "pinterest", "tailtarget"
+        )
+        def interceptar_rede(route):
+            req = route.request
+            url_req = req.url.lower()
+            tipo = req.resource_type
+            if any(dominio in url_req for dominio in BLOQUEIO_REDE):
+                return route.abort()
+            if tipo in ("media", "beacon", "websocket"):
+                return route.abort()
+            if tipo == "image" and "mercadolivre" not in url_req:
+                return route.abort()
+            if tipo in ("stylesheet", "font") and "amazon" not in url_req and "mercadolivre" not in url_req and "mlstatic" not in url_req:
+                return route.abort()
+            return route.continue_()
+        
+        pagina.route("**/*", interceptar_rede)
         
         urls_ja_varridas = set()
         
@@ -240,49 +259,56 @@ def executar_robo(modo="completo"):
                 url_vitrine = item_vitrine[1] if isinstance(item_vitrine, tuple) else item_vitrine
                 lista_produtos = extrair_vitrine_panini(pagina, url_vitrine ,max_paginas=100, urls_vistas=urls_ja_varridas)
                 for dados in lista_produtos:
-                    processar_produto(dados, conexao_db)
+                    processar_produto(dados, conexao_db, comitar=False)
+                conexao_db.commit()
 
         if modo in ("completo", "Editoras", "NewPOP") and not scraper.cancelar_varredura:
             for url_newpop in VITRINES_NEWPOP:
                 if scraper.cancelar_varredura: break
                 lista_newpop = extrair_vitrine_newpop(pagina, url_newpop, max_paginas=100, urls_vistas=urls_ja_varridas)
                 for dados in lista_newpop:
-                    processar_produto(dados, conexao_db)
+                    processar_produto(dados, conexao_db, comitar=False)
+                conexao_db.commit()
                 
         if modo in ("completo", "Editoras", "Pipoca") and not scraper.cancelar_varredura:
             for url_pipoca in VITRINES_PIPOCA:
                 if scraper.cancelar_varredura: break
                 lista_pipoca = extrair_vitrine_pipoca(pagina, url_pipoca, max_paginas=100, urls_vistas=urls_ja_varridas)
                 for dados in lista_pipoca:
-                    processar_produto(dados,conexao_db)
+                    processar_produto(dados,conexao_db, comitar=False)
+                conexao_db.commit()
                     
         if modo in ("completo", "Editoras", "MPEG") and not scraper.cancelar_varredura:
             for url_mpeg in VITRINES_MPEG:
                 if scraper.cancelar_varredura: break
                 lista_mpeg = extrair_vitrine_pipoca(pagina, url_mpeg, max_paginas=100, urls_vistas=urls_ja_varridas)
                 for dados in lista_mpeg:
-                    processar_produto(dados, conexao_db)
+                    processar_produto(dados, conexao_db, comitar=False)
+                conexao_db.commit()
                     
         if modo in ("completo", "Editoras", "JBC") and not scraper.cancelar_varredura:
             for url_jbc in VITRINES_JBC:
                 if scraper.cancelar_varredura: break
                 lista_jbc = extrair_vitrine_jbc(pagina, url_jbc, max_cliques=100, urls_vistas=urls_ja_varridas)
                 for dados in lista_jbc:
-                    processar_produto(dados, conexao_db)
+                    processar_produto(dados, conexao_db, comitar=False)
+                conexao_db.commit()
                     
         if modo in ("completo", "Amazon", "Marketplaces") and not scraper.cancelar_varredura:
             for editora_nome, url_amz in BUSCAS_AMAZON:
                 if scraper.cancelar_varredura: break
                 lista_amz = extrair_vitrine_amazon(pagina, url_amz, editora_padrao=editora_nome, max_paginas=100, urls_vistas=urls_ja_varridas)
                 for dados in lista_amz:
-                    processar_produto(dados, conexao_db)
+                    processar_produto(dados, conexao_db, comitar=False)
+                conexao_db.commit()
                     
         if modo in ("completo", "Mercado Livre", "Marketplaces") and not scraper.cancelar_varredura:
             for editora_nome, url_ml in BUSCAS_MERCADOLIVRE:
                 if scraper.cancelar_varredura: break
                 lista_ml = extrair_vitrine_mercadolivre(pagina, url_ml, editora_padrao=editora_nome, max_paginas=100, urls_vistas=urls_ja_varridas)
                 for dados in lista_ml:
-                    processar_produto(dados, conexao_db)
+                    processar_produto(dados, conexao_db, comitar=False)
+                conexao_db.commit()
         
         navegador.close()
         conexao_db.close()

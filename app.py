@@ -1,11 +1,13 @@
+import struct
 import subprocess
 import time
 import threading
+import zlib
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 from database import (
     inicializar_banco, listar_ofertas, alternar_favorito,
     buscar_historico_produto, definir_preco_alvo, conectar,
-    definir_titulo_editado, listar_logs, obter_config, salvar_config, ocultar_produto
+    definir_titulo_editado, listar_logs, obter_config, obter_configs, salvar_config, ocultar_produto
 )
 from main import executar_robo
 
@@ -60,8 +62,9 @@ def loop_agendador():
         if intervalo_auto_min <= 0:
             continue
         agora = int(time.time())
+        configs = obter_configs()
         for modo_regra, chave_db, intervalo_seg, _ in REGRAS_AUTO:
-            ult = obter_config(chave_db, 0)
+            ult = configs.get(chave_db, 0)
             if ult == 0:
                 salvar_config(chave_db, agora)
             elif (agora - ult) >= intervalo_seg:
@@ -181,7 +184,7 @@ def adicionar_link_wishlist():
 
 @app.route("/editar_titulo/<int:produto_id>", methods=["POST"])
 def editar_titulo(produto_id):
-    dados = request.get.json() or {}
+    dados = request.get_json() or {}
     novo_titulo = dados.get("titulo", "")
     nome_final = definir_titulo_editado(produto_id, novo_titulo)
     return jsonify({"ok": True, "nome": nome_final})
@@ -205,9 +208,10 @@ def terminal_vivo():
 @app.route("/fila")
 def status_fila():
     agora = int(time.time())
+    configs = obter_configs()
     proximos = []
     for modo_regra, chave_db, intervalo_seg, rotulo in REGRAS_AUTO:
-        ult = obter_config(chave_db, 0)
+        ult = configs.get(chave_db, 0)
         restante = max(0, (ult + intervalo_seg) - agora) if (intervalo_auto_min > 0 and ult > 0) else -1
         proximos.append({"rotulo": rotulo, "modo": modo_regra, "restante_seg": restante})
     return jsonify({
@@ -229,9 +233,28 @@ def ocultar_item(produto_id):
     ocultar_produto(produto_id)
     return jsonify({"ok": True})
 
+def _bloco_png(tipo, dados):
+    return struct.pack(">I", len(dados)) + tipo + dados + struct.pack(">I", zlib.crc32(tipo + dados) & 0xffffffff)
+
+@app.route("/icon-<int:tamanho>.png")
+def pwa_icone(tamanho):
+    tam= min(max(tamanho, 64), 512)
+    borda = max(9, tam // 8)
+    roxo = bytes([130, 87, 229, 255])
+    escuro = bytes([19, 17, 28, 255])
+    linha_cheia = b"\x00" + roxo * tam
+    linha_miolo = b"\x00" + (roxo * borda) + (escuro * (tam - 2 * borda)) + (roxo * borda)
+    bruto = (linha_cheia * borda) + (linha_miolo * (tam - 2 * borda)) + (linha_cheia * borda)
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        + _bloco_png(b"IHDR", struct.pack(">IIBBBBB", tam, tam, 8, 6, 0, 0, 0))
+        + _bloco_png(b"IDAT", zlib.compress(bruto))
+        + _bloco_png(b"IEND", b"")
+    )
+    return app.response_class(png, mimetype="image/png")
+
 @app.route("/manifest.json")
 def pwa_manifest():
-    icone_svg = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%238257e5' /><text y='68' x='50' text-anchor='middle' font-size='55'>📚</text></svg>"
     return jsonify({
         "name": "Radar de Promoções HQs & Mangás",
         "short_name": "RadarPromo",
@@ -239,7 +262,10 @@ def pwa_manifest():
         "display": "standalone",
         "background_color": "#09090b",
         "theme_color": "#13111c",
-        "icons": [{"src": icone_svg, "sizes": "192x192 512x512", "type": "image/svg+xml", "purpose": "any maskable"}]
+        "icons": [
+            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+        ]
     })
     
 @app.route("/sw.js")
